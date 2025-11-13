@@ -10,15 +10,19 @@ import { getServerSettings } from './systems/admin';
 import cron from 'node-cron';
 
 import { collectCommand, vaultCommand, upgradeCommand } from './commands/vault-commands';
+import { startCommand } from './commands/start-command';
+import { helpCommand } from './commands/help-command';
 import { artifactsCommand } from './commands/artifact-commands';
 import { auctionCreateCommand, auctionBidCommand, auctionsCommand } from './commands/auction-commands';
 import { marketBuyCommand, marketSellCommand, marketCommand } from './commands/market-commands';
 import { coinflipCommand, raidCommand, crateCommand, eventsCommand, leaderboardCommand } from './commands/game-commands';
+import { diceCommand, blackjackCommand, slotsCommand, dailyCommand, triviaCommand, rouletteCommand, lotteryCommand, rpsCommand } from './commands/new-minigames';
 import { allianceCommand, contributeCommand, allianceLeaderboardCommand, allianceUpgradeCommand } from './commands/alliance-commands';
 import { loanCommand, payLoanCommand, myLoansCommand, cancelLoanCommand } from './commands/loan-commands';
 import { vaultSkinCommand } from './commands/skin-commands';
 import { grantAdminCommand, revokeAdminCommand, listAdminsCommand, setupCommand } from './commands/admin-commands';
 import { warRankingsCommand } from './commands/war-commands';
+import { listStockCommand, stocksCommand, buySharesCommand, sellSharesCommand, portfolioCommand, stockInfoCommand } from './commands/stock-commands';
 
 dotenv.config();
 
@@ -30,13 +34,16 @@ const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.GuildMembers
+        GatewayIntentBits.GuildMembers,
+        GatewayIntentBits.MessageContent
     ]
 }) as ExtendedClient;
 
 client.commands = new Collection();
 
 const commands = [
+    startCommand,
+    helpCommand,
     collectCommand,
     vaultCommand,
     upgradeCommand,
@@ -47,7 +54,21 @@ const commands = [
     marketBuyCommand,
     marketSellCommand,
     marketCommand,
+    listStockCommand,
+    stocksCommand,
+    buySharesCommand,
+    sellSharesCommand,
+    portfolioCommand,
+    stockInfoCommand,
     coinflipCommand,
+    diceCommand,
+    blackjackCommand,
+    slotsCommand,
+    dailyCommand,
+    triviaCommand,
+    rouletteCommand,
+    lotteryCommand,
+    rpsCommand,
     raidCommand,
     crateCommand,
     eventsCommand,
@@ -103,6 +124,26 @@ client.once('ready', async () => {
             await endExpiredEvents();
             await finalizeExpiredAuctions();
             await autoDeductOverdueLoans();
+        });
+        
+        cron.schedule('0 */2 * * *', async () => {
+            try {
+                const stocksModule = await import('./systems/stocks');
+                await stocksModule.updateStockPrices();
+                console.log('📈 Stock prices updated');
+            } catch (error) {
+                console.error('Error updating stock prices:', error);
+            }
+        });
+        
+        cron.schedule('0 0 * * *', async () => {
+            try {
+                const stocksModule = await import('./systems/stocks');
+                await stocksModule.payDividends();
+                console.log('💰 Dividends paid to stockholders');
+            } catch (error) {
+                console.error('Error paying dividends:', error);
+            }
         });
         
         cron.schedule('0 * * * *', async () => {
@@ -217,6 +258,91 @@ client.on('interactionCreate', async interaction => {
         } else {
             await interaction.reply({ content: errorMessage, ephemeral: true });
         }
+    }
+});
+
+client.on('messageCreate', async message => {
+    if (message.author.bot) return;
+    if (!message.mentions.has(client.user!.id)) return;
+    
+    const content = message.content.replace(`<@${client.user!.id}>`, '').trim();
+    const args = content.split(' ');
+    const commandName = args[0]?.toLowerCase();
+    
+    if (!commandName) {
+        await message.reply('👋 Hi! Use commands like: `@VaultRush collect`, `@VaultRush vault`, `@VaultRush help`\nOr use slash commands: `/collect`, `/vault`, `/help`');
+        return;
+    }
+    
+    const commandMap: { [key: string]: string } = {
+        'collect': 'collect',
+        'vault': 'vault',
+        'start': 'start',
+        'help': 'help',
+        'upgrade': 'upgrade',
+        'artifacts': 'artifacts',
+        'stocks': 'stocks',
+        'portfolio': 'portfolio',
+        'coinflip': 'coinflip',
+        'flip': 'coinflip',
+        'raid': 'raid',
+        'crate': 'crate',
+        'daily': 'daily',
+        'dice': 'dice',
+        'slots': 'slots',
+        'blackjack': 'blackjack',
+        'bj': 'blackjack',
+        'roulette': 'roulette',
+        'lottery': 'lottery',
+        'trivia': 'trivia',
+        'rps': 'rps',
+        'leaderboard': 'leaderboard',
+        'lb': 'leaderboard',
+        'events': 'events',
+        'alliance': 'alliance',
+        'market': 'market'
+    };
+    
+    const actualCommandName = commandMap[commandName];
+    
+    if (!actualCommandName) {
+        await message.reply(`❌ Unknown command: **${commandName}**\nUse \`@VaultRush help\` to see all available commands!`);
+        return;
+    }
+    
+    const command = client.commands.get(actualCommandName);
+    
+    if (!command) {
+        await message.reply(`❌ Command not found! Use \`@VaultRush help\` for available commands.`);
+        return;
+    }
+    
+    try {
+        const { updateUserActivity } = require('./systems/maintenance');
+        await updateUserActivity(message.author.id);
+        
+        const mockInteraction = {
+            deferReply: async () => {
+                await message.channel.sendTyping();
+            },
+            editReply: async (content: any) => {
+                await message.reply(content);
+            },
+            reply: async (content: any) => {
+                await message.reply(content);
+            },
+            user: message.author,
+            options: {
+                getString: () => null,
+                getInteger: () => null,
+                getUser: () => null
+            }
+        };
+        
+        await command.execute(mockInteraction);
+    } catch (error) {
+        console.error('Error executing @mention command:', error);
+        await message.reply('❌ There was an error executing this command!');
     }
 });
 

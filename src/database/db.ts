@@ -176,6 +176,57 @@ CREATE TABLE IF NOT EXISTS activity_highlights (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS vault_stocks (
+    id SERIAL PRIMARY KEY,
+    vault_owner_id VARCHAR(20) REFERENCES users(discord_id) ON DELETE CASCADE,
+    stock_symbol VARCHAR(10) UNIQUE NOT NULL,
+    company_name VARCHAR(255) NOT NULL,
+    total_shares BIGINT DEFAULT 10000,
+    shares_available BIGINT DEFAULT 10000,
+    current_price BIGINT DEFAULT 100,
+    price_change_24h FLOAT DEFAULT 0.0,
+    market_cap BIGINT DEFAULT 0,
+    dividend_rate FLOAT DEFAULT 0.05,
+    last_dividend_payout TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    performance_score FLOAT DEFAULT 1.0,
+    is_public BOOLEAN DEFAULT true,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS stock_holdings (
+    id SERIAL PRIMARY KEY,
+    stock_id INTEGER REFERENCES vault_stocks(id) ON DELETE CASCADE,
+    holder_id VARCHAR(20) REFERENCES users(discord_id) ON DELETE CASCADE,
+    shares_owned BIGINT DEFAULT 0,
+    average_buy_price BIGINT DEFAULT 0,
+    total_invested BIGINT DEFAULT 0,
+    total_dividends_earned BIGINT DEFAULT 0,
+    purchased_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(stock_id, holder_id)
+);
+
+CREATE TABLE IF NOT EXISTS stock_transactions (
+    id SERIAL PRIMARY KEY,
+    stock_id INTEGER REFERENCES vault_stocks(id) ON DELETE CASCADE,
+    user_id VARCHAR(20) REFERENCES users(discord_id) ON DELETE CASCADE,
+    transaction_type VARCHAR(10) NOT NULL,
+    shares INTEGER NOT NULL,
+    price_per_share BIGINT NOT NULL,
+    total_amount BIGINT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS stock_dividends (
+    id SERIAL PRIMARY KEY,
+    stock_id INTEGER REFERENCES vault_stocks(id) ON DELETE CASCADE,
+    holder_id VARCHAR(20) REFERENCES users(discord_id) ON DELETE CASCADE,
+    amount BIGINT NOT NULL,
+    shares_held BIGINT NOT NULL,
+    payout_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 INSERT INTO admins (user_id, is_super_admin, granted_by)
 VALUES ('1296110901057032202', true, 'system')
 ON CONFLICT (user_id) DO NOTHING;
@@ -196,6 +247,10 @@ CREATE INDEX IF NOT EXISTS idx_alliances_power ON server_alliances(vault_power D
 CREATE INDEX IF NOT EXISTS idx_contributions_guild ON alliance_contributions(guild_id);
 CREATE INDEX IF NOT EXISTS idx_loans_borrower ON loans(borrower_id, status);
 CREATE INDEX IF NOT EXISTS idx_wars_week ON vault_wars(week_number, rank);
+CREATE INDEX IF NOT EXISTS idx_stocks_symbol ON vault_stocks(stock_symbol);
+CREATE INDEX IF NOT EXISTS idx_stocks_public ON vault_stocks(is_public, current_price DESC);
+CREATE INDEX IF NOT EXISTS idx_holdings_holder ON stock_holdings(holder_id);
+CREATE INDEX IF NOT EXISTS idx_stock_transactions_user ON stock_transactions(user_id, created_at DESC);
         `;
         
         await pool.query(schema);
