@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS users (
     vault_speed_level INTEGER DEFAULT 1,
     coins_per_hour FLOAT DEFAULT 100.0,
     last_collection TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    last_activity TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     total_earned BIGINT DEFAULT 0,
     total_spent BIGINT DEFAULT 0
@@ -91,10 +92,110 @@ INSERT INTO game_stats (total_coins_circulating, total_artifacts, token_market_p
 VALUES (0, 0, 100)
 ON CONFLICT DO NOTHING;
 
+CREATE TABLE IF NOT EXISTS server_alliances (
+    guild_id VARCHAR(20) PRIMARY KEY,
+    guild_name VARCHAR(255) NOT NULL,
+    vault_coins BIGINT DEFAULT 0,
+    vault_level INTEGER DEFAULT 1,
+    vault_power BIGINT DEFAULT 0,
+    total_contributions BIGINT DEFAULT 0,
+    war_enabled BOOLEAN DEFAULT false,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    last_activity TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS alliance_contributions (
+    id SERIAL PRIMARY KEY,
+    guild_id VARCHAR(20) REFERENCES server_alliances(guild_id) ON DELETE CASCADE,
+    user_id VARCHAR(20) REFERENCES users(discord_id) ON DELETE CASCADE,
+    amount BIGINT NOT NULL,
+    contributed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS vault_skins (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    description TEXT,
+    image_url TEXT,
+    rarity VARCHAR(20) DEFAULT 'Common',
+    unlock_requirement TEXT
+);
+
+CREATE TABLE IF NOT EXISTS user_skins (
+    user_id VARCHAR(20) REFERENCES users(discord_id) ON DELETE CASCADE,
+    skin_id INTEGER REFERENCES vault_skins(id) ON DELETE CASCADE,
+    equipped BOOLEAN DEFAULT false,
+    unlocked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (user_id, skin_id)
+);
+
+CREATE TABLE IF NOT EXISTS loans (
+    id SERIAL PRIMARY KEY,
+    lender_id VARCHAR(20) REFERENCES users(discord_id) ON DELETE CASCADE,
+    borrower_id VARCHAR(20) REFERENCES users(discord_id) ON DELETE CASCADE,
+    amount BIGINT NOT NULL,
+    interest_rate FLOAT DEFAULT 0.1,
+    total_owed BIGINT NOT NULL,
+    amount_paid BIGINT DEFAULT 0,
+    status VARCHAR(20) DEFAULT 'active',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    due_date TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS admins (
+    user_id VARCHAR(20) PRIMARY KEY,
+    is_super_admin BOOLEAN DEFAULT false,
+    granted_by VARCHAR(20),
+    granted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS server_settings (
+    guild_id VARCHAR(20) PRIMARY KEY,
+    updates_channel_id VARCHAR(20),
+    war_enabled BOOLEAN DEFAULT false,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS vault_wars (
+    id SERIAL PRIMARY KEY,
+    week_number INTEGER NOT NULL,
+    guild_id VARCHAR(20) REFERENCES server_alliances(guild_id) ON DELETE CASCADE,
+    vault_power BIGINT DEFAULT 0,
+    rank INTEGER,
+    coins_won BIGINT DEFAULT 0,
+    coins_lost BIGINT DEFAULT 0,
+    status VARCHAR(20) DEFAULT 'active',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS activity_highlights (
+    id SERIAL PRIMARY KEY,
+    guild_id VARCHAR(20),
+    message TEXT NOT NULL,
+    highlight_type VARCHAR(50),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+INSERT INTO admins (user_id, is_super_admin, granted_by)
+VALUES ('1296110901057032202', true, 'system')
+ON CONFLICT (user_id) DO NOTHING;
+
+INSERT INTO vault_skins (name, description, image_url, rarity, unlock_requirement)
+VALUES 
+    ('Classic Vault', 'The original vault design', 'placeholder_classic.png', 'Common', 'default'),
+    ('Golden Vault', 'Shiny and prestigious', 'placeholder_golden.png', 'Rare', 'Reach 100k coins'),
+    ('Diamond Vault', 'Sparkles with wealth', 'placeholder_diamond.png', 'Epic', 'Reach 1M coins'),
+    ('Cosmic Vault', 'Out of this world', 'placeholder_cosmic.png', 'Legendary', 'Win Vault Wars')
+ON CONFLICT DO NOTHING;
+
 CREATE INDEX IF NOT EXISTS idx_users_coins ON users(coins DESC);
 CREATE INDEX IF NOT EXISTS idx_artifacts_owner ON artifacts(owner_id);
 CREATE INDEX IF NOT EXISTS idx_auctions_status ON auctions(status, ends_at);
 CREATE INDEX IF NOT EXISTS idx_market_orders_status ON market_orders(status, order_type);
+CREATE INDEX IF NOT EXISTS idx_alliances_power ON server_alliances(vault_power DESC);
+CREATE INDEX IF NOT EXISTS idx_contributions_guild ON alliance_contributions(guild_id);
+CREATE INDEX IF NOT EXISTS idx_loans_borrower ON loans(borrower_id, status);
+CREATE INDEX IF NOT EXISTS idx_wars_week ON vault_wars(week_number, rank);
         `;
         
         await pool.query(schema);
@@ -119,16 +220,23 @@ export async function getOrCreateUser(discordId: string, username: string) {
 
 export async function calculatePendingCoins(userId: string): Promise<number> {
     const result = await pool.query(
-        `SELECT last_collection, coins_per_hour, vault_level, vault_speed_level FROM users WHERE discord_id = $1`,
+        `SELECT last_collection, last_activity, coins_per_hour, vault_level, vault_speed_level FROM users WHERE discord_id = $1`,
         [userId]
     );
     
     if (result.rows.length === 0) return 0;
     
-    const { last_collection, coins_per_hour, vault_level, vault_speed_level } = result.rows[0];
+    const { last_collection, last_activity, coins_per_hour, vault_level, vault_speed_level } = result.rows[0];
     const now = new Date();
     const lastCollection = new Date(last_collection);
-    const hoursPassed = (now.getTime() - lastCollection.getTime()) / (1000 * 60 * 60);
+    const lastActivityTime = new Date(last_activity);
+    
+    const INACTIVITY_THRESHOLD_HOURS = 6;
+    const productionStopTime = new Date(lastActivityTime.getTime() + INACTIVITY_THRESHOLD_HOURS * 60 * 60 * 1000);
+    
+    const effectiveEndTime = now < productionStopTime ? now : productionStopTime;
+    
+    const hoursPassed = Math.max(0, (effectiveEndTime.getTime() - lastCollection.getTime()) / (1000 * 60 * 60));
     
     const artifactBonuses = await pool.query(
         `SELECT SUM(bonus_value) as total_bonus 

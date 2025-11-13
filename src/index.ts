@@ -3,6 +3,10 @@ import * as dotenv from 'dotenv';
 import { initializeDatabase } from './database/db';
 import { scheduleRandomEvents, endExpiredEvents } from './systems/events';
 import { finalizeExpiredAuctions } from './systems/auction';
+import { startVaultWar, finalizeVaultWar, getCurrentWeekNumber } from './systems/wars';
+import { autoDeductOverdueLoans } from './systems/loans';
+import { generateHourlyHighlights } from './systems/highlights';
+import { getServerSettings } from './systems/admin';
 import cron from 'node-cron';
 
 import { collectCommand, vaultCommand, upgradeCommand } from './commands/vault-commands';
@@ -10,6 +14,11 @@ import { artifactsCommand } from './commands/artifact-commands';
 import { auctionCreateCommand, auctionBidCommand, auctionsCommand } from './commands/auction-commands';
 import { marketBuyCommand, marketSellCommand, marketCommand } from './commands/market-commands';
 import { coinflipCommand, raidCommand, crateCommand, eventsCommand, leaderboardCommand } from './commands/game-commands';
+import { allianceCommand, contributeCommand, allianceLeaderboardCommand, allianceUpgradeCommand } from './commands/alliance-commands';
+import { loanCommand, payLoanCommand, myLoansCommand, cancelLoanCommand } from './commands/loan-commands';
+import { vaultSkinCommand } from './commands/skin-commands';
+import { grantAdminCommand, revokeAdminCommand, listAdminsCommand, setupCommand } from './commands/admin-commands';
+import { warRankingsCommand } from './commands/war-commands';
 
 dotenv.config();
 
@@ -20,7 +29,8 @@ interface ExtendedClient extends Client {
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
-        GatewayIntentBits.GuildMessages
+        GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.GuildMembers
     ]
 }) as ExtendedClient;
 
@@ -41,7 +51,21 @@ const commands = [
     raidCommand,
     crateCommand,
     eventsCommand,
-    leaderboardCommand
+    leaderboardCommand,
+    allianceCommand,
+    contributeCommand,
+    allianceLeaderboardCommand,
+    allianceUpgradeCommand,
+    loanCommand,
+    payLoanCommand,
+    myLoansCommand,
+    cancelLoanCommand,
+    vaultSkinCommand,
+    grantAdminCommand,
+    revokeAdminCommand,
+    listAdminsCommand,
+    setupCommand,
+    warRankingsCommand
 ];
 
 commands.forEach(command => {
@@ -78,9 +102,92 @@ client.once('ready', async () => {
         cron.schedule('*/5 * * * *', async () => {
             await endExpiredEvents();
             await finalizeExpiredAuctions();
+            await autoDeductOverdueLoans();
+        });
+        
+        cron.schedule('0 * * * *', async () => {
+            const highlights = await generateHourlyHighlights();
+            
+            for (const highlight of highlights) {
+                client.guilds.cache.forEach(async guild => {
+                    const settings = await getServerSettings(guild.id);
+                    if (settings?.updates_channel_id) {
+                        const channel = guild.channels.cache.get(settings.updates_channel_id);
+                        if (channel && channel.isTextBased()) {
+                            await channel.send(highlight.message);
+                        }
+                    }
+                });
+            }
+            
+            const { getInactiveUsers } = require('./systems/maintenance');
+            const inactiveUsers = await getInactiveUsers();
+            
+            const userGuilds = new Map();
+            for (const user of inactiveUsers) {
+                for (const guild of client.guilds.cache.values()) {
+                    try {
+                        await guild.members.fetch();
+                    } catch (error) {
+                        console.error(`Failed to fetch members for guild ${guild.id}`);
+                    }
+                    const member = guild.members.cache.get(user.discord_id);
+                    if (member) {
+                        if (!userGuilds.has(user.discord_id)) {
+                            userGuilds.set(user.discord_id, []);
+                        }
+                        userGuilds.get(user.discord_id).push(guild);
+                    }
+                }
+            }
+            
+            for (const user of inactiveUsers) {
+                const guilds = userGuilds.get(user.discord_id) || [];
+                
+                if (guilds.length > 0) {
+                    for (const guild of guilds) {
+                        const settings = await getServerSettings(guild.id);
+                        if (settings?.updates_channel_id) {
+                            const channel = guild.channels.cache.get(settings.updates_channel_id);
+                            if (channel && channel.isTextBased()) {
+                                await channel.send(`⚠️ **Inactivity Alert:** <@${user.discord_id}>'s vault stopped producing coins due to 6 hours of inactivity. Use any command to restart production!`);
+                            }
+                        }
+                    }
+                } else {
+                    try {
+                        const dmUser = await client.users.fetch(user.discord_id);
+                        await dmUser.send(`⚠️ **Vault Maintenance Alert**\n\nYour vault has stopped producing coins after 6 hours of inactivity!\n\nUse any command in a VaultRush server to restart production immediately.`);
+                    } catch (error) {
+                        console.log(`Could not send DM to inactive user ${user.discord_id}`);
+                    }
+                }
+            }
+        });
+        
+        cron.schedule('0 0 * * 1', async () => {
+            await startVaultWar();
+            console.log('🔥 New Vault War started!');
+        });
+        
+        cron.schedule('0 0 * * 5', async () => {
+            const results = await finalizeVaultWar();
+            console.log('⚔️ Vault War finalized!', results);
+            
+            client.guilds.cache.forEach(async guild => {
+                const settings = await getServerSettings(guild.id);
+                if (settings?.updates_channel_id && settings?.war_enabled) {
+                    const channel = guild.channels.cache.get(settings.updates_channel_id);
+                    if (channel && channel.isTextBased()) {
+                        await channel.send(`⚔️ **VAULT WARS WEEK ${getCurrentWeekNumber() - 1} CONCLUDED!**\nUse /war-rankings to see the results!`);
+                    }
+                }
+            });
         });
         
         console.log('✅ Event scheduler started');
+        console.log('✅ War scheduler started');
+        console.log('✅ Highlights scheduler started');
         console.log('🎮 VaultRush is now running!');
         
     } catch (error) {
@@ -96,6 +203,9 @@ client.on('interactionCreate', async interaction => {
     if (!command) return;
     
     try {
+        const { updateUserActivity } = require('./systems/maintenance');
+        await updateUserActivity(interaction.user.id);
+        
         await command.execute(interaction);
     } catch (error) {
         console.error('Error executing command:', error);

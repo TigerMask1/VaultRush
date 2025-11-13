@@ -4,6 +4,7 @@
 VaultRush is a Discord bot game featuring automatic vault coin generation, collectible artifacts with rarity tiers, live auctions, market trading, and timed events. Built with Discord.js, TypeScript, and PostgreSQL for persistent cloud storage.
 
 ## Recent Changes
+- **2025-11-13**: Major expansion - Added server alliances, maintenance system, vault skins, loans, vault wars, admin system, and activity feed
 - **2025-11-13**: Initial project setup with Node.js, TypeScript, and PostgreSQL integration
 
 ## Project Architecture

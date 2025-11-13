@@ -2,6 +2,7 @@ import { ChatInputCommandInteraction, EmbedBuilder, SlashCommandBuilder } from '
 import { getOrCreateUser } from '../database/db';
 import { collectCoins, upgradeVault, getVaultInfo } from '../systems/vault';
 import { awardRandomArtifact } from '../systems/events';
+import { checkAndUnlockSkins } from '../systems/skins';
 
 export const collectCommand = {
     data: new SlashCommandBuilder()
@@ -11,9 +12,11 @@ export const collectCommand = {
         await interaction.deferReply();
         
         const user = await getOrCreateUser(interaction.user.id, interaction.user.username);
+        
         const result = await collectCoins(interaction.user.id);
         
         const artifact = await awardRandomArtifact(interaction.user.id);
+        const unlockedSkins = await checkAndUnlockSkins(interaction.user.id, result.newTotal);
         
         const embed = new EmbedBuilder()
             .setColor('#FFD700')
@@ -28,6 +31,13 @@ export const collectCommand = {
             embed.addFields({
                 name: '🎁 Bonus Drop!',
                 value: `You found a **${artifact.rarity}** artifact: ${artifact.name}!`
+            });
+        }
+        
+        if (unlockedSkins.length > 0) {
+            embed.addFields({
+                name: '🎨 Vault Skins Unlocked!',
+                value: unlockedSkins.join(', ')
             });
         }
         
