@@ -32,7 +32,7 @@ export async function getActiveEvents() {
     const result = await pool.query(
         `SELECT * FROM events 
          WHERE is_active = true AND ends_at > CURRENT_TIMESTAMP
-         ORDER BY created_at DESC`
+         ORDER BY started_at DESC`
     );
     
     return result.rows;
