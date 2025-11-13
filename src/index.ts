@@ -302,20 +302,26 @@ client.on('interactionCreate', async interaction => {
     if (!command) return;
     
     try {
-        const { updateUserActivity } = require('./systems/maintenance');
-        await updateUserActivity(interaction.user.id);
-        
         await command.execute(interaction);
     } catch (error) {
         console.error('Error executing command:', error);
         
-        const errorMessage = '❌ There was an error executing this command!';
-        
-        if (interaction.replied || interaction.deferred) {
-            await interaction.followUp({ content: errorMessage, ephemeral: true });
-        } else {
-            await interaction.reply({ content: errorMessage, ephemeral: true });
+        try {
+            const errorMessage = '❌ There was an error executing this command!';
+            
+            if (interaction.replied || interaction.deferred) {
+                await interaction.followUp({ content: errorMessage, ephemeral: true });
+            } else {
+                await interaction.reply({ content: errorMessage, ephemeral: true });
+            }
+        } catch (replyError) {
+            console.error('Could not send error message (interaction expired):', replyError);
         }
+    } finally {
+        const { updateUserActivity } = require('./systems/maintenance');
+        updateUserActivity(interaction.user.id).catch((err: any) => {
+            console.error('Error updating user activity:', err);
+        });
     }
 });
 
