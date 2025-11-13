@@ -1,5 +1,6 @@
 import { Client, GatewayIntentBits, Collection, REST, Routes } from 'discord.js';
 import * as dotenv from 'dotenv';
+import express from 'express';
 import { initializeDatabase } from './database/db';
 import { scheduleRandomEvents, endExpiredEvents } from './systems/events';
 import { finalizeExpiredAuctions } from './systems/auction';
@@ -25,6 +26,63 @@ import { warRankingsCommand } from './commands/war-commands';
 import { listStockCommand, stocksCommand, buySharesCommand, sellSharesCommand, portfolioCommand, stockInfoCommand } from './commands/stock-commands';
 
 dotenv.config();
+
+const app = express();
+const PORT = process.env.PORT || 5000;
+
+app.get('/', (req, res) => {
+    res.json({
+        status: 'online',
+        bot: 'VaultRush',
+        version: '2.0.0',
+        message: 'VaultRush Discord Bot is running! 🎮',
+        features: [
+            'Vault System with Passive Income',
+            'Stock Market Trading',
+            'Mini-Games (Dice, Blackjack, Slots, Roulette, etc.)',
+            'Artifact Collection & Auctions',
+            'Alliance System & Vault Wars',
+            'Loan System',
+            'Daily Rewards & Events'
+        ],
+        uptime: process.uptime(),
+        timestamp: new Date().toISOString()
+    });
+});
+
+app.get('/health', (req, res) => {
+    res.json({ 
+        status: 'healthy', 
+        uptime: process.uptime(),
+        timestamp: new Date().toISOString() 
+    });
+});
+
+app.get('/stats', (req, res) => {
+    if (!client || !client.isReady()) {
+        return res.json({
+            guilds: 0,
+            users: 0,
+            commands: 0,
+            uptime: process.uptime(),
+            ready: false,
+            message: 'Bot is starting up...'
+        });
+    }
+    
+    res.json({
+        guilds: client.guilds?.cache.size || 0,
+        users: client.users?.cache.size || 0,
+        commands: commands.length,
+        uptime: process.uptime(),
+        ready: true
+    });
+});
+
+app.listen(PORT, () => {
+    console.log(`🌐 Web server running on port ${PORT}`);
+    console.log(`🔗 Health check: http://localhost:${PORT}/health`);
+});
 
 interface ExtendedClient extends Client {
     commands: Collection<string, any>;

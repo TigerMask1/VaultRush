@@ -4,6 +4,7 @@
 VaultRush is a comprehensive Discord bot game featuring automatic vault coin generation, collectible artifacts with rarity tiers, live auctions, market trading, **stock market investments**, **hybrid command system**, and extensive mini-games. Built with Discord.js, TypeScript, and PostgreSQL for persistent cloud storage.
 
 ## Recent Changes
+- **2025-11-13**: VERSION 2.0 - Added Express web server for Render hosting, comprehensive help system with 5 tutorial sections (Getting Started, Commands, Mini-Games, Stock Market, Tips & Strategies)
 - **2025-11-13**: MAJOR UPDATE - Added `/start` command, stock market system, hybrid @bot command support, and 8 new mini-games
 - **2025-11-13**: Added server alliances, maintenance system, vault skins, loans, vault wars, admin system, and activity feed
 - **2025-11-13**: Initial project setup with Node.js, TypeScript, and PostgreSQL integration
@@ -237,3 +238,100 @@ The economy is **intentionally inflationary** with multiple coin sources and sin
 - **Vault Wars**: Weekly Monday start, Friday end
 - **Auctions**: Auto-finalized when expired
 - **Loans**: Auto-deducted when overdue
+
+## Web Server & Health Endpoints
+VaultRush includes an Express.js web server for hosting compatibility with platforms like Render:
+
+**Endpoints:**
+- `GET /` - Bot status and feature list (JSON)
+- `GET /health` - Health check endpoint (returns uptime and status)
+- `GET /stats` - Bot statistics (guilds, users, commands, ready status)
+
+**Port:** Defaults to 5000 (configurable via `PORT` environment variable)
+
+This allows the bot to be deployed on web hosting platforms that require HTTP endpoints for health checks and monitoring.
+
+## Deployment to Render.com
+
+VaultRush is ready to deploy to Render! Follow these steps:
+
+### Prerequisites
+1. A Discord bot token from [Discord Developer Portal](https://discord.com/developers/applications)
+2. A PostgreSQL database (Render provides free PostgreSQL databases)
+3. A Render account
+
+### Deployment Steps
+
+1. **Create New Web Service on Render**
+   - Connect your GitHub/GitLab repository
+   - Select "Web Service" (not "Background Worker")
+   - Environment: Node
+
+2. **Configure Build & Start Commands**
+   - Build Command: `npm install && npm run build`
+   - Start Command: `npm start`
+
+3. **Set Environment Variables**
+   Required secrets:
+   - `DISCORD_BOT_TOKEN` - Your Discord bot token
+   - `DATABASE_URL` - PostgreSQL connection string (from Render database)
+   - `PORT` - Set to `5000` (or leave blank, Render auto-assigns)
+
+4. **Create PostgreSQL Database (if needed)**
+   - In Render dashboard, create new PostgreSQL database
+   - Copy the "External Database URL" 
+   - Add it as `DATABASE_URL` environment variable
+
+5. **Deploy**
+   - Click "Create Web Service"
+   - Render will build and deploy automatically
+   - Health checks will use the `/health` endpoint
+
+### Monitoring
+- Check logs in Render dashboard for bot status
+- Visit your web service URL to see bot info (JSON response)
+- Use `/health` endpoint for uptime monitoring
+
+### Important Notes
+- The web server runs on port 5000 by default
+- Health checks ensure your bot stays running 24/7
+- Discord bot and web server run in the same process
+- Free tier may have limitations (use paid tier for production)
+
+## Enhanced Help System
+
+VaultRush now features a comprehensive in-Discord help system with 5 detailed sections:
+
+### Help Sections
+Use `/help` with these options:
+
+1. **Getting Started** (`/help getting_started`)
+   - Complete beginner guide with step-by-step instructions
+   - Vault basics and upgrade system
+   - Quick start command chain
+   - New player onboarding
+
+2. **All Commands** (`/help commands`)
+   - Complete command reference organized by category
+   - Vault, mini-games, stock market, alliances, economy
+   - Quick lookup for experienced players
+
+3. **Mini-Games Guide** (`/help minigames`)
+   - Detailed strategy for each game
+   - Odds, payouts, and optimal plays
+   - Bankroll management tips
+   - PvP raid strategies
+
+4. **Stock Market Guide** (`/help stocks`)
+   - How the stock market works
+   - Investment strategies and tips
+   - Dividend earnings explained
+   - When to buy and sell
+
+5. **Tips & Strategies** (`/help tips`)
+   - Early, mid, and late game strategies
+   - Common mistakes to avoid
+   - Hidden features and bonuses
+   - Path to top 10 leaderboard
+
+This interactive help system teaches players how to succeed in VaultRush without leaving Discord!
