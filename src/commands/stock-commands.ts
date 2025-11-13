@@ -151,7 +151,7 @@ export const sellSharesCommand = {
         const profitEmoji = profit >= 0 ? '📈' : '📉';
         const profitText = profit >= 0 ? `+${profit.toLocaleString()}` : profit.toLocaleString();
         
-        const marketPrice = result.pricePerShare! * result.quantity;
+        const marketPrice = result.pricePerShare! * result.quantity!;
         const tradingFee = Math.floor(marketPrice * 0.05);
         
         const embed = new EmbedBuilder()
