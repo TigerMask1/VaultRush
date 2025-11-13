@@ -25,7 +25,7 @@ src/
 ```
 
 ## Core Features
-1. **Vault Machine**: Automatic offline coin generation with collection rewards
+1. **Vault Machine**: Automatic offline coin generation with collection rewards (inflationary by design)
 2. **Upgrade System**: Escalating costs for vault speed and coin rate improvements
 3. **Artifacts**: Collectibles with rarity tiers (Common, Rare, Epic, Legendary) and passive bonuses
 4. **Auction House**: Live bidding system for artifacts
@@ -33,6 +33,15 @@ src/
 6. **Events**: Timed events like Golden Hour (2x coins) and Black Vault Day (rare drops)
 7. **Mini-Games**: Coin flips and vault raids for high-risk rewards
 8. **Leaderboard**: Rankings and vault displays
+
+## Economy Design
+The economy is **intentionally inflationary** to match user requirements for "automatic coin generation" as a core mechanic:
+- **Coin Sources**: Passive vault generation (100 coins/hour base), winning mini-games, successful raids
+- **Coin Sinks**: Vault upgrades (escalating costs), auction house, mystery crates, failed raids, coin flip losses
+- **Balance Mechanism**: Exponential upgrade costs (1.5x multiplier per level) create natural progression caps
+- **Social Features**: Auctions and raids redistribute coins between players, creating player-driven economy dynamics
+
+This matches the user's vision of "reward rush" and "always have a reason to come back and grow."
 
 ## Database Schema
 - **users**: Player accounts with vault stats and balances

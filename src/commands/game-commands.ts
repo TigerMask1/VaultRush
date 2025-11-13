@@ -100,11 +100,11 @@ export const crateCommand = {
             .setColor('#FFD700')
             .setTitle('📦 Mystery Crate Opened!');
         
-        if (result.reward.type === 'coins') {
-            embed.setDescription(`You received **${result.reward.amount.toLocaleString()} coins**! 💰`);
-        } else if (result.reward.type === 'tokens') {
-            embed.setDescription(`You received **${result.reward.amount} Vault Tokens**! 🪙`);
-        } else if (result.reward.type === 'artifact') {
+        if (result.reward && result.reward.type === 'coins') {
+            embed.setDescription(`You received **${result.reward.amount?.toLocaleString() || 0} coins**! 💰`);
+        } else if (result.reward && result.reward.type === 'tokens') {
+            embed.setDescription(`You received **${result.reward.amount || 0} Vault Tokens**! 🪙`);
+        } else if (result.reward && result.reward.type === 'artifact') {
             const artifact = result.reward.artifact;
             embed.setDescription(`You found a ${getRarityEmoji(artifact.rarity)} **${artifact.rarity}** artifact!\n\n**${artifact.name}**\n${artifact.description}`);
         }
